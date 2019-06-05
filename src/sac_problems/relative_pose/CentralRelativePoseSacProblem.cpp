@@ -83,7 +83,7 @@ opengv::sac_problems::
   case EIGHTPT:
   {
     std::vector<int> subIndices4;
-    for(size_t i = 0; i < 8; i++) subIndices4.push_back(indices[i]);
+    for(size_t i = 0; i < indices.size(); i++) subIndices4.push_back(indices[i]);
     essential_t essentialMatrix =
         opengv::relative_pose::eightpt(_adapter,subIndices4);
     essentialMatrices.push_back(essentialMatrix);
@@ -300,8 +300,9 @@ opengv::sac_problems::
   rotation_t rotation = model.block<3,3>(0,0);
   _adapter.sett12(translation);
   _adapter.setR12(rotation);
-  optimized_model =
-      opengv::relative_pose::optimize_nonlinear(_adapter,inliers);
+/*  optimized_model =
+      opengv::relative_pose::optimize_nonlinear(_adapter,inliers);*/
+  computeModelCoefficients(inliers, optimized_model);
 }
 
 int

@@ -125,6 +125,13 @@ namespace polyview {
              */
             virtual std::vector<int> getSampleSizes() const;
 
+            static double getSmallestEVwithJacobian(
+                    const EigensolverSacProblem::adapter_t &adapter,
+                    const std::vector<std::vector<int> > &indices,
+                    const size_t & camID,
+                    const opengv::cayley_t & cayley,
+                    Eigen::Matrix<double,1,3> & jacobian);
+
 
 
         protected:

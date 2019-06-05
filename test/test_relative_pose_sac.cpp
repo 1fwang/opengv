@@ -48,127 +48,200 @@
 #include "random_generators.hpp"
 #include "experiment_helpers.hpp"
 #include "time_measurement.hpp"
-
+#include <opengv/math/cayley.hpp>
 
 using namespace std;
 using namespace Eigen;
 using namespace opengv;
 
-int main( int argc, char** argv )
-{
-  // initialize random seed
-  initializeRandomSeed();
+int main(int argc, char **argv) {
+    // initialize random seed
+    initializeRandomSeed();
 
-  //set experiment parameters
-  double noise = 0.5;
-  double outlierFraction = 0.1;
-  size_t numberPoints = 100;
+    for (int level = 0; level < 11; level++) {
+        double noise = 2.0;
+        std::cout << "noise level: " << noise << std::endl;
+        for (size_t loop = 0; loop < 1000; loop++) {
 
-  //generate a random pose for viewpoint 1
-  translation_t position1 = Eigen::Vector3d::Zero();
-  rotation_t rotation1 = Eigen::Matrix3d::Identity();
+            //set experiment parameters
+            double outlierFraction = level * 0.03;
+            size_t numberPoints = 100;
 
-  //generate a random pose for viewpoint 2
-  translation_t position2 = generateRandomTranslation(2.0);
-  rotation_t rotation2 = generateRandomRotation(0.5);
+            //generate a random pose for viewpoint 1
+            translation_t position1 = Eigen::Vector3d::Zero();
+            rotation_t rotation1 = Eigen::Matrix3d::Identity();
 
-  //create a fake central camera
-  translations_t camOffsets;
-  rotations_t camRotations;
-  generateCentralCameraSystem( camOffsets, camRotations );
+            //generate a random pose for viewpoint 2
+            //  translation_t position2 = generateRandomDirectionTranslation(0.0005);
+            //  rotation_t rotation2 = generateRandomRotation(0.5);
 
-  //derive correspondences based on random point-cloud
-  bearingVectors_t bearingVectors1;
-  bearingVectors_t bearingVectors2;
-  std::vector<int> camCorrespondences1; //unused in the central case
-  std::vector<int> camCorrespondences2; //unused in the central case
-  Eigen::MatrixXd gt(3,numberPoints);
-  generateRandom2D2DCorrespondences(
-      position1, rotation1, position2, rotation2,
-      camOffsets, camRotations, numberPoints, noise, outlierFraction,
-      bearingVectors1, bearingVectors2,
-      camCorrespondences1, camCorrespondences2, gt );
+            translation_t position2 = Eigen::Vector3d::Zero();
+            rotation_t rotation2 = Eigen::Matrix3d::Identity();
+            double random_t = (((double) rand()) / ((double) RAND_MAX)) * 0.5 + 0.5;
+            for (int i = 0; i < 6; i++) {
+                double theta = (0.75 + i * 0.05) * random_t;
+                theta = theta / 180 * M_PI;
+                rotation_t rel_r;
+                translation_t rel_t;
+                rel_r << cos(theta), -sin(theta), 0,
+                        sin(theta), cos(theta), 0,
+                        0, 0, 1;
+                rel_t << -sin(theta), cos(theta), 0;
+                rel_t = 0.1 * rel_t / rel_t.norm();
+                position2 = position2 + rotation2 * rel_t;
+                rotation2 = rotation2 * rel_r;
+            }
 
-  //Extract the relative pose
-  translation_t position; rotation_t rotation;
-  extractRelativePose(
-      position1, position2, rotation1, rotation2, position, rotation );
+            double angle = opengv::math::rot2cayley(rotation2)[2];
+            angle = asin((2 * angle) / (1 + pow(angle, 2)));
 
-  //print experiment characteristics
-  printExperimentCharacteristics( position, rotation, noise, outlierFraction );
-  
-  //compute and print the essential-matrix
-  printEssentialMatrix( position, rotation );
+            //create a fake central camera
+            translations_t camOffsets;
+            rotations_t camRotations;
 
-  //create a central relative adapter
-  relative_pose::CentralRelativeAdapter adapter(
-      bearingVectors1,
-      bearingVectors2,
-      rotation);
 
-  //Create a RelativePoseSac problem and Ransac
-  //Set algorithm to NISTER, STEWENIUS, SEVENPT, or EIGHTPT
-  sac::Ransac<
-      sac_problems::relative_pose::CentralRelativePoseSacProblem> ransac;
-  std::shared_ptr<
-      sac_problems::relative_pose::CentralRelativePoseSacProblem> relposeproblem_ptr(
-      new sac_problems::relative_pose::CentralRelativePoseSacProblem(
-      adapter,
-      sac_problems::relative_pose::CentralRelativePoseSacProblem::STEWENIUS));
-  ransac.sac_model_ = relposeproblem_ptr;
-  ransac.threshold_ = 2.0*(1.0 - cos(atan(sqrt(2.0)*0.5/800.0)));
-  ransac.max_iterations_ = 50;
+            bool use_random_offset = false;
 
-  //Run the experiment
-  struct timeval tic;
-  struct timeval toc;
-  gettimeofday( &tic, 0 );
-  ransac.computeModel();
-  gettimeofday( &toc, 0 );
-  double ransac_time = TIMETODOUBLE(timeval_minus(toc,tic));
+            if (use_random_offset) {
+                generateCentralCameraSystem(camOffsets, camRotations);
+            } else {
+                camOffsets.resize(1);
+                camRotations.resize(1);
+                size_t mode = 1;
+                switch (mode) {
+                    case 1:
+                        camOffsets[0] << 0, 0, 0;
+                        camRotations[0] << 1, 0, 0, 0, 0, 1, 0, -1, 0;
+                        break;
+                    case 2:
+                        camOffsets[0] << 0.2, 0, 0;
+                        camRotations[0] << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+                        break;
+                    case 3:
+                        camOffsets[0] << 0, 0.3, 0;
+                        camRotations[0] << 1, 0, 0, 0, 0, 1, 0, -1, 0;
+                        break;
+                    case 4:
+                        camOffsets[0] << 0, -0.3, 0;
+                        camRotations[0] << -1, 0, 0, 0, 0, -1, 0, -1, 0;
+                        break;
+                }
+            }
 
-  //print results for ransac 1
-  std::cout << "the ransac threshold is: " << ransac.threshold_ << std::endl;
-  std::cout << "the ransac results is: " << std::endl;
-  std::cout << ransac.model_coefficients_ << std::endl << std::endl;
-  std::cout << "the normalized translation is: " << std::endl;
-  std::cout << ransac.model_coefficients_.col(3)/
-      ransac.model_coefficients_.col(3).norm() << std::endl << std::endl;
-  std::cout << "Ransac needed " << ransac.iterations_ << " iterations and ";
-  std::cout << ransac_time << " seconds" << std::endl << std::endl;
-  std::cout << "the number of inliers is: " << ransac.inliers_.size();
-  std::cout << std::endl << std::endl;
-  std::cout << "the found inliers are: " << std::endl;
-  for(size_t i = 0; i < ransac.inliers_.size(); i++)
-    std::cout << ransac.inliers_[i] << " ";
-  std::cout << std::endl << std::endl;
+            //derive correspondences based on random point-cloud
+            bearingVectors_t bearingVectors1;
+            bearingVectors_t bearingVectors2;
+            std::vector<int> camCorrespondences1; //unused in the central case
+            std::vector<int> camCorrespondences2; //unused in the central case
+            Eigen::MatrixXd gt(3, numberPoints);
+            generateRandom2D2DCorrespondences(
+                    position1, rotation1, position2, rotation2,
+                    camOffsets, camRotations, numberPoints, noise, outlierFraction,
+                    bearingVectors1, bearingVectors2,
+                    camCorrespondences1, camCorrespondences2, gt);
 
-  // Create Lmeds
-  sac::Lmeds<
-      sac_problems::relative_pose::CentralRelativePoseSacProblem> lmeds;
-  lmeds.sac_model_ = relposeproblem_ptr;
-  lmeds.threshold_ = 2.0*(1.0 - cos(atan(sqrt(2.0)*0.5/800.0)));
-  lmeds.max_iterations_ = 50;
+            //Extract the relative pose
+            translation_t position;
+            rotation_t rotation;
+            extractRelativePose(
+                    position1, position2, rotation1, rotation2, position, rotation);
 
-  //Run the experiment
-  gettimeofday( &tic, 0 );
-  lmeds.computeModel();
-  gettimeofday( &toc, 0 );
-  double lmeds_time = TIMETODOUBLE(timeval_minus(toc,tic));
+//            //print experiment characteristics
+//            printExperimentCharacteristics(position, rotation, noise, outlierFraction);
+//
+//            //compute and print the essential-matrix
+//            printEssentialMatrix(position, rotation);
 
-  //print results
-  std::cout << "the lmeds threshold is: " << lmeds.threshold_ << std::endl;
-  std::cout << "the lmeds results is: " << std::endl;
-  std::cout << lmeds.model_coefficients_ << std::endl << std::endl;
-  std::cout << "the normalized translation is: " << std::endl;
-  std::cout << lmeds.model_coefficients_.col(3)/
-      lmeds.model_coefficients_.col(3).norm() << std::endl << std::endl;
-  std::cout << "Lmeds needed " << lmeds.iterations_ << " iterations and ";
-  std::cout << lmeds_time << " seconds" << std::endl << std::endl;
-  std::cout << "the number of inliers is: " << lmeds.inliers_.size();
-  std::cout << std::endl << std::endl;
-  std::cout << "the found inliers are: " << std::endl;
-  for(size_t i = 0; i < lmeds.inliers_.size(); i++)
-    std::cout << lmeds.inliers_[i] << " ";
-  std::cout << std::endl << std::endl;
+            for (int j = 0; j < bearingVectors1.size(); j++) {
+                bearingVectors1[j] = camRotations[0] * bearingVectors1[j];
+                bearingVectors2[j] = camRotations[0] * bearingVectors2[j];
+            }
+
+            //create a central relative adapter
+            relative_pose::CentralRelativeAdapter adapter(
+                    bearingVectors1,
+                    bearingVectors2,
+                    rotation);
+
+            //Create a RelativePoseSac problem and Ransac
+            //Set algorithm to NISTER, STEWENIUS, SEVENPT, or EIGHTPT
+            struct timeval tic;
+            struct timeval toc;
+
+            gettimeofday( &tic, 0 );
+            sac::Ransac<
+                    sac_problems::relative_pose::CentralRelativePoseSacProblem> ransac;
+            std::shared_ptr<
+                    sac_problems::relative_pose::CentralRelativePoseSacProblem> relposeproblem_ptr(
+                    new sac_problems::relative_pose::CentralRelativePoseSacProblem(
+                            adapter,
+                            sac_problems::relative_pose::CentralRelativePoseSacProblem::EIGHTPT));
+            ransac.sac_model_ = relposeproblem_ptr;
+            ransac.threshold_ = 2.0 * (1.0 - cos(atan(sqrt(2.0) * 3.0 / 800.0)));
+            ransac.max_iterations_ = 1000;
+
+            //Run the experiment
+            ransac.computeModel();
+
+            gettimeofday( &toc, 0 );
+            double eight_time = TIMETODOUBLE(timeval_minus(toc,tic));
+            size_t eight_iter = ransac.iterations_;
+            double eight_inliers = 0;
+            for (size_t i = 0; i < ransac.inliers_.size(); i++)
+                if (ransac.inliers_[i] > numberPoints * outlierFraction) {
+                    eight_inliers = eight_inliers + 1;
+                }
+
+            eight_inliers = eight_inliers / (numberPoints * (1 - outlierFraction));
+
+            /*sac_problems::relative_pose::CentralRelativePoseSacProblem::model_t optimizedModel;
+            relposeproblem_ptr->optimizeModelCoefficients(
+                    ransac.inliers_,
+                    ransac.model_coefficients_,
+                    optimizedModel);
+
+            double z3 = opengv::math::rot2cayley(rotation2.transpose() * optimizedModel.block<3, 3>(0, 0))[2];
+            double optimizedError = asin((2 * z3) / (1 + pow(z3, 2)));
+
+            //    std::cout << optimizedModel << std::endl << std::endl;
+            //    std::cout << abs(optimizedError) << std::endl << std::endl;
+
+            std::ofstream output1;
+
+            std::string basePath("/home/ifwang/Documents/3DV/experiment/simulation");
+            std::string FolderPath("eightpt");
+
+            char t_error_Path[200];
+            sprintf(t_error_Path, "%s/%s/noise_%.1f.txt", basePath.c_str(), FolderPath.c_str(), noise);
+
+            output1.precision(6);
+            output1.open(t_error_Path, std::ios::app);
+            output1 << abs(optimizedError) << std::endl;*/
+
+            std::ofstream output1,output2,output3;
+            std::string basePath("/home/ifwang/Documents/3DV/experiment/simulation_iter");
+            std::string FolderPath1("eightpt");
+
+            char time_eight[200];
+            char iter_eight[200];
+            char inlier_eight[200];
+
+            sprintf(time_eight, "%s/%s/time_%.2f.txt", basePath.c_str(),FolderPath1.c_str(),outlierFraction);
+            sprintf(iter_eight, "%s/%s/iter_%.2f.txt", basePath.c_str(),FolderPath1.c_str(),outlierFraction);
+            sprintf(inlier_eight, "%s/%s/inlier_%.2f.txt", basePath.c_str(),FolderPath1.c_str(),outlierFraction);
+
+            output1.precision(6);
+            output1.open(time_eight, std::ios::app);
+            output1 << eight_time << std::endl;
+
+            output2.precision(6);
+            output2.open(iter_eight, std::ios::app);
+            output2 << eight_iter << std::endl;
+
+            output3.precision(6);
+            output3.open(inlier_eight, std::ios::app);
+            output3 << eight_inliers << std::endl;
+        }
+    }
+    std::cout<<"done"<<std::endl;
 }

@@ -988,8 +988,8 @@ opengv::relative_pose::modules::ge_main2(
       V(i,j) = V_complex(i,j).real();
   }
 
-  double factor = V(3,0);
-  Eigen::Vector4d t = (1.0/factor) * V.col(0);
+  double factor = V(3,3);
+  Eigen::Vector4d t = (1.0/factor) * V.col(3);
 
   output.translation = t;
   output.rotation = math::cayley2rot(cayley);

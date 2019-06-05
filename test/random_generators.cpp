@@ -47,13 +47,22 @@ opengv::initializeRandomSeed()
 Eigen::Vector3d
 opengv::generateRandomPoint( double maximumDepth, double minimumDepth )
 {
-  Eigen::Vector3d cleanPoint;
+/*  Eigen::Vector3d cleanPoint;
   cleanPoint[0] = (((double) rand())/ ((double) RAND_MAX)-0.5)*2.0;
   cleanPoint[1] = (((double) rand())/ ((double) RAND_MAX)-0.5)*2.0;
   cleanPoint[2] = (((double) rand())/ ((double) RAND_MAX)-0.5)*2.0;
   Eigen::Vector3d direction = cleanPoint / cleanPoint.norm();
   cleanPoint =
       (maximumDepth-minimumDepth) * cleanPoint + minimumDepth * direction;
+  return cleanPoint;*/
+
+  double fov = 120;
+  double tmp = tan(fov / 360*M_PI);
+  //std::cout<<"angle:"<<tmp<<std::endl;
+  Eigen::Vector3d cleanPoint;
+  cleanPoint[2] = (((double) rand())/ ((double) RAND_MAX)) * (maximumDepth - minimumDepth) + minimumDepth;
+  cleanPoint[0] = (((double) rand())/ ((double) RAND_MAX)-0.5)*2.0 * tmp * cleanPoint[2];
+  cleanPoint[1] = (((double) rand())/ ((double) RAND_MAX)-0.5)*2.0 * tmp * cleanPoint[2];
   return cleanPoint;
 }
 

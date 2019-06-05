@@ -45,7 +45,7 @@ opengv::sac_problems::relative_pose::MultiNoncentralRelativePoseSacProblem::
     model_t & outModel ) const
 {
   bool returnValue = true;
-  
+
   if(!_asCentral)
   {
     switch(_algorithm)

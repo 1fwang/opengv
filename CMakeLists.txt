@@ -55,7 +55,16 @@ ENDIF()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/modules/")
 find_package(Eigen REQUIRED)
-set(ADDITIONAL_INCLUDE_DIRS ${EIGEN_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIR}/unsupported)
+
+find_package(OpenCV 3 QUIET)
+if(OpenCV_FOUND)
+  include_directories(${OpenCV_INCLUDE_DIRS})
+  message(STATUS "OpenCV 3 found.")
+else()
+  message(STATUS "OpenCV 3 not found! Please set your OpenCV_DIR!")
+endif()
+
+set(ADDITIONAL_INCLUDE_DIRS ${OpenCV_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIR}/unsupported)
 
 set( OPENGV_SOURCE_FILES
         src/absolute_pose/modules/main.cpp
@@ -179,7 +188,7 @@ set( OPENGV_HEADER_FILES
 add_library( opengv ${OPENGV_SOURCE_FILES} ${OPENGV_HEADER_FILES} )
 add_library(  random_generators test/random_generators.cpp test/random_generators.hpp test/experiment_helpers.cpp test/experiment_helpers.hpp
         test/time_measurement.cpp test/time_measurement.hpp test/EigensolverSacProblem.cpp test/EigensolverSacProblem.hpp
-        test/EigensolverAdapter.cpp test/EigensolverAdapter.hpp)
+        test/EigensolverAdapter.cpp test/EigensolverAdapter.hpp test/test_generalized_cam.cpp)
 set_target_properties( opengv random_generators PROPERTIES
         SOVERSION ${PROJECT_VERSION}
         VERSION ${PROJECT_VERSION}
@@ -233,7 +242,7 @@ IF (BUILD_TESTS)
           COMMAND test_multi_noncentral_absolute_pose_sac)
 
   add_executable( test_relative_pose test/test_relative_pose.cpp )
-  target_link_libraries( test_relative_pose opengv random_generators )
+  target_link_libraries( test_relative_pose opengv random_generators ${OpenCV_LIBS})
   add_test(NAME test_relative_pose
           WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
           COMMAND test_relative_pose)
@@ -310,6 +319,12 @@ IF (BUILD_TESTS)
           WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
           COMMAND test_Sturm)
 
+  add_executable( test_generalized_cam test/test_generalized_cam.cpp )
+  target_link_libraries( test_generalized_cam opengv random_generators )
+  add_test(NAME test_generalized_cam
+          WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+          COMMAND test_generalized_cam)
+
   set_target_properties(
           test_absolute_pose
           test_absolute_pose_sac
@@ -329,6 +344,7 @@ IF (BUILD_TESTS)
           test_point_cloud
           test_point_cloud_sac
           test_Sturm
+          test_generalized_cam
 
           PROPERTIES
           CXX_STANDARD 11
